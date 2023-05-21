@@ -2,8 +2,11 @@ package com.fly.project.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fly.flyapiclientsdk.client.FlyApiClient;
 import com.fly.flyapiclientsdk.model.Query.PictureRequest;
+import com.fly.flyapiclientsdk.model.Query.WeboHotRequest;
+import com.fly.flyapiclientsdk.model.WeboHot;
 import com.fly.flyapicommon.model.entity.InterfaceInfo;
 import com.fly.flyapicommon.model.entity.User;
 import com.fly.project.model.dto.interfaceinfo.InterfaceInfoInvokeRequest;
@@ -20,11 +23,13 @@ import com.fly.project.model.dto.interfaceinfo.InterfaceInfoUpdateRequest;
 import com.fly.project.model.enums.InterfaceInfoStatusEnum;
 import com.fly.project.service.InterfaceInfoService;
 import com.fly.project.service.UserService;
+import com.fly.project.utils.RedisConstants;
 import com.google.gson.Gson;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
@@ -32,7 +37,10 @@ import javax.servlet.http.HttpServletRequest;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * 帖子接口
@@ -52,6 +60,10 @@ public class InterfaceInfoController {
 
     @Resource
     private FlyApiClient flyApiClient;
+
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+
     // region 增删改查
 
     /**
@@ -185,6 +197,7 @@ public class InterfaceInfoController {
         if (InterfaceInfoQueryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+
         InterfaceInfo InterfaceInfoQuery = new InterfaceInfo();
         BeanUtils.copyProperties(InterfaceInfoQueryRequest, InterfaceInfoQuery);
         long current = InterfaceInfoQueryRequest.getCurrent();
@@ -198,13 +211,26 @@ public class InterfaceInfoController {
         if (size > 50) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
+
+        String key = RedisConstants.LIST_PAGE_INTERFACE;
+        Page<InterfaceInfo> interfaceInfoPage = (Page<InterfaceInfo>) redisTemplate.opsForValue().get(key);
+        if (interfaceInfoPage != null) {
+            return ResultUtils.success(interfaceInfoPage);
+        }
+
+
         QueryWrapper<InterfaceInfo> queryWrapper = new QueryWrapper<>(InterfaceInfoQuery);
         queryWrapper.like(StringUtils.isNotBlank(description), "description", description);
         queryWrapper.orderBy(StringUtils.isNotBlank(sortField),
                 sortOrder.equals(CommonConstant.SORT_ORDER_ASC), sortField);
         queryWrapper.orderByDesc("id");
-        Page<InterfaceInfo> InterfaceInfoPage = interfaceInfoService.page(new Page<>(current, size), queryWrapper);
-        return ResultUtils.success(InterfaceInfoPage);
+        //Page<InterfaceInfo> InterfaceInfoPage
+        interfaceInfoPage = interfaceInfoService.page(new Page<>(current, size), queryWrapper);
+
+        redisTemplate.opsForValue().set(key, interfaceInfoPage);
+        redisTemplate.expire(key, RedisConstants.LIST_PAGE_INTERFACE_TIME, TimeUnit.MINUTES);
+
+        return ResultUtils.success(interfaceInfoPage);
     }
 
     // endregion
@@ -339,6 +365,14 @@ public class InterfaceInfoController {
                 PictureRequest pictureRequest = gson.fromJson(userRequestParams, PictureRequest.class);
                 try {
                     res = temp.getPicture(pictureRequest);
+                } catch (Exception e) {
+                    throw new BusinessException(ErrorCode.SYSTEM_ERROR, "请求错误");
+                }
+                break;
+            }
+            case HOST_INTERFACE + "/hot/get": {
+                try {
+                   res = temp.getHot();
                 } catch (Exception e) {
                     throw new BusinessException(ErrorCode.SYSTEM_ERROR, "请求错误");
                 }

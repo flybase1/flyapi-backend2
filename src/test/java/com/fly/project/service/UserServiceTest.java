@@ -9,18 +9,29 @@ import com.fly.flyapicommon.service.InnerUserInterfaceInfoService;
 import com.fly.project.common.ErrorCode;
 import com.fly.project.common.GateWayErrorCode;
 import com.fly.project.exception.BusinessException;
+import com.fly.project.model.dto.user.UserPersonInfo;
 import com.fly.project.service.impl.UserInterfaceInfoServiceImpl;
 import com.google.gson.Gson;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.BeanUtils;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import javax.annotation.Resource;
+import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.security.Key;
+import javax.crypto.Cipher;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.util.Base64;
 
 /**
  * 用户服务测试
@@ -241,5 +252,39 @@ class UserServiceTest {
         Map<String,Object> map = userInterfaceInfoService.getMap(queryWrapper);
         BigDecimal sumAll = (BigDecimal) map.get("sumAll");
         System.out.println(sumAll);
+    }
+
+
+    @Test
+    void testDownload() {
+        FileWriter fileWriter = null;
+
+        QueryWrapper<User> queryWrapper =new QueryWrapper<>();
+        queryWrapper.eq("userAccount","admin");
+        User one = userService.getOne(queryWrapper);
+        String userAccount = one.getUserAccount();
+        String secretKey = one.getSecretKey();
+        String accessKey = one.getAccessKey();
+
+        try {
+            fileWriter =new FileWriter("D:\\bkm\\test.csv");
+            fileWriter.write("账号名,标识(accessKey),密钥(secretKey)\n"); // 列名
+
+            fileWriter.write(userAccount + ","); // 在第一列写入账号名，以逗号结尾
+            fileWriter.write(accessKey + ","); // 在第二列写入标识，以逗号结尾
+            fileWriter.write(secretKey + "\n"); // 在第三列写入密钥，并换行
+            fileWriter.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (fileWriter != null) {
+                    fileWriter.close(); // 关闭文件写入器
+                    System.out.println("当前相关文件被关闭");
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }

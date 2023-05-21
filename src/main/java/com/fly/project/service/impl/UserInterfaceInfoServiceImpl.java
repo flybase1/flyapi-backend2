@@ -14,10 +14,14 @@ import com.fly.project.exception.BusinessException;
 import com.fly.project.mapper.UserInterfaceInfoMapper;
 import com.fly.project.model.vo.UserVO;
 import com.fly.project.service.UserInterfaceInfoService;
+import com.fly.project.utils.RedisConstants;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import java.math.BigDecimal;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author admin
@@ -27,6 +31,8 @@ import java.util.Map;
 @Service
 public class UserInterfaceInfoServiceImpl extends ServiceImpl<UserInterfaceInfoMapper, UserInterfaceInfo>
         implements UserInterfaceInfoService {
+    @Resource
+    private RedisTemplate<String,Object> redisTemplate;
 
     @Override
     public void validUserInterfaceInfo(UserInterfaceInfo userInterfaceInfo, boolean b) {
@@ -95,13 +101,23 @@ public class UserInterfaceInfoServiceImpl extends ServiceImpl<UserInterfaceInfoM
         return userInterfaceInfo.getLeftNum();
     }
 
+
     @Override
     public BigDecimal getAllInvokeCount() {
         // select sum(totalNum) from user_interface_info;
+        String key = RedisConstants.SUM_INTERFACE+10;
+        BigDecimal bigDecimal = (BigDecimal) redisTemplate.opsForValue().get(key);
+        if (bigDecimal!=null){
+            return bigDecimal;
+        }
+
         QueryWrapper<UserInterfaceInfo> queryWrapper =new QueryWrapper<>();
         queryWrapper.select("sum(totalNum) as sumAll");
         Map<String,Object> map = this.getMap(queryWrapper);
         BigDecimal sumAll = (BigDecimal) map.get("sumAll");
+
+        redisTemplate.opsForValue().set(key,sumAll);
+        redisTemplate.expire(key,RedisConstants.SUM_INTERFACE_TIME, TimeUnit.MINUTES);
         return sumAll;
     }
 

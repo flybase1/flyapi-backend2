@@ -10,13 +10,9 @@ import java.io.Serializable;
  * @author yupi
  */
 @Data
-public class UserLoginRequest implements Serializable {
+public class UserPhoneLoginRequest implements Serializable {
 
     private static final long serialVersionUID = 3191241716373120793L;
-
-    private String userAccount;
-
-    private String userPassword;
 
     private String phoneNum;
 

@@ -12,17 +12,20 @@
         <result property="gender" column="gender" jdbcType="TINYINT"/>
         <result property="userRole" column="userRole" jdbcType="VARCHAR"/>
         <result property="userPassword" column="userPassword" jdbcType="VARCHAR"/>
+        <result property="phoneNum" column="phoneNum" jdbcType="VARCHAR"/>
+        <result property="email" column="email" jdbcType="VARCHAR"/>
         <result property="createTime" column="createTime" jdbcType="TIMESTAMP"/>
         <result property="updateTime" column="updateTime" jdbcType="TIMESTAMP"/>
         <result property="isDelete" column="isDelete" jdbcType="TINYINT"/>
         <result property="accessKey" column="accessKey" jdbcType="VARCHAR"/>
         <result property="secretKey" column="secretKey" jdbcType="VARCHAR"/>
+        <result property="downloadCount" column="downloadCount" jdbcType="TINYINT"/>
     </resultMap>
 
     <sql id="Base_Column_List">
         id,userName,userAccount,
         userAvatar,gender,userRole,
-        userPassword,createTime,updateTime,
-        isDelete,accessKey,secretKey
+        userPassword,phoneNum,email,createTime,updateTime,
+        isDelete,accessKey,secretKey,downloadCount
     </sql>
 </mapper>

@@ -1,17 +1,15 @@
-package com.fly.project.model.vo;
+package com.fly.project.model.dto.user;
 
 import lombok.Data;
 
 import java.io.Serializable;
 import java.util.Date;
 
-/**
- * 用户视图
- *
- * @TableName user
- */
 @Data
-public class UserVO implements Serializable {
+public class UserPersonInfo implements Serializable {
+
+    private static final long serialVersionUID = -7348070200081832963L;
+
     /**
      * id
      */
@@ -42,33 +40,22 @@ public class UserVO implements Serializable {
      */
     private String userRole;
 
+
     /**
      * 创建时间
      */
     private Date createTime;
 
-    /**
-     * 更新时间
-     */
-    private Date updateTime;
-    /**
-     * 用户手机号
-     */
 
+    /**
+     * 手机号
+     */
     private String phoneNum;
-
 
     /**
      * 邮箱
      */
-
     private String email;
 
-    /**
-     * 下载密钥次数
-     */
-    private Integer downloadCount;
 
-
-    private static final long serialVersionUID = 1L;
 }

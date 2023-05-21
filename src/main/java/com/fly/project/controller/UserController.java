@@ -1,5 +1,6 @@
 package com.fly.project.controller;
 
+import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.plugins.pagination.PageDTO;
@@ -13,14 +14,22 @@ import com.fly.project.model.dto.user.*;
 import com.fly.project.model.vo.UserVO;
 import com.fly.project.service.UserService;
 import com.fly.project.utils.RedisConstants;
+import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -69,7 +78,7 @@ public class UserController {
      * @return
      */
     @PostMapping( "/login" )
-    public BaseResponse<User> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
+    public BaseResponse<UserVO> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
         if (userLoginRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -78,9 +87,44 @@ public class UserController {
         if (StringUtils.isAnyBlank(userAccount, userPassword)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        User user = userService.userLogin(userAccount, userPassword, request);
+        UserVO user = userService.userLogin(userAccount, userPassword, request);
         return ResultUtils.success(user);
     }
+
+    /**
+     * 用户手机号登录
+     *
+     * @param userphoneLoginRequest
+     * @param request
+     * @return
+     */
+    @PostMapping( "/phone/login" )
+    public BaseResponse<UserVO> phoneLogin(@RequestBody UserPhoneLoginRequest userphoneLoginRequest, HttpServletRequest request) {
+        if (userphoneLoginRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+
+        String phoneNum = userphoneLoginRequest.getPhoneNum();
+        String code = userphoneLoginRequest.getCode();
+
+        if (StringUtils.isAnyBlank(phoneNum, code)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        UserVO user = userService.userPhoneLogin(phoneNum, code, request);
+        return ResultUtils.success(user);
+    }
+
+    /**
+     * 发送验证码
+     *
+     * @return
+     */
+    @GetMapping( "/sendCode" )
+    public BaseResponse<String> sendCode(String phoneNum) {
+        String code = userService.sendCode(phoneNum);
+        return ResultUtils.success(code);
+    }
+
 
     /**
      * 用户注销
@@ -164,9 +208,7 @@ public class UserController {
         if (userUpdateRequest == null || userUpdateRequest.getId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        User user = new User();
-        BeanUtils.copyProperties(userUpdateRequest, user);
-        boolean result = userService.updateById(user);
+        boolean result = userService.updateByUserId(userUpdateRequest);
         return ResultUtils.success(result);
     }
 
@@ -220,43 +262,13 @@ public class UserController {
      */
     @GetMapping( "/list/page" )
     public BaseResponse<Page<UserVO>> listUserByPage(UserQueryRequest userQueryRequest, HttpServletRequest request) {
-        long current = 1;
-        long size = 10;
-        User userQuery = new User();
-        if (userQueryRequest != null) {
-            BeanUtils.copyProperties(userQueryRequest, userQuery);
-            current = userQueryRequest.getCurrent();
-            size = userQueryRequest.getPageSize();
+        if (userQueryRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
 
-        //todo 存入redis
-/*
-        String userKey = RedisConstants.LIST_USERS_KEY+userQuery.getId();
-        Page<UserVO> userVORedis = (Page<UserVO>) redisTemplate.opsForValue().get(userKey);
-        // 判断是否有缓存，有就直接读缓存
-        if (userVORedis!=null){
-            return ResultUtils.success(userVORedis);
-        }
-
-*/
-
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>(userQuery);
-        Page<User> userPage = userService.page(new Page<>(current, size), queryWrapper);
-        Page<UserVO> userVOPage = new PageDTO<>(userPage.getCurrent(), userPage.getSize(), userPage.getTotal());
-        List<UserVO> userVOList = userPage.getRecords().stream().map(user -> {
-            UserVO userVO = new UserVO();
-            BeanUtils.copyProperties(user, userVO);
-            return userVO;
-        }).collect(Collectors.toList());
-        userVOPage.setRecords(userVOList);
-
-        // 无缓存，读数据库
-/*        redisTemplate.opsForValue().set(userKey,userVOPage,RedisConstants.LIST_USER_TIME);*/
-
-        return ResultUtils.success(userVOPage);
+        Page<UserVO> listPageUsers = userService.listPageUsers(userQueryRequest, request);
+        return ResultUtils.success(listPageUsers);
     }
-
-    // endregion
 
 
     @PostMapping( "/forgetPassword" )
@@ -280,4 +292,70 @@ public class UserController {
         return ResultUtils.success(success);
     }
 
+    @GetMapping( "/get/developer" )
+    public BaseResponse<UserPersonInfo> developerInfo(Long userId, HttpServletRequest request) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+        }
+        UserPersonInfo userAccessKey = userService.getUserPersonInfo(userId, request);
+        return ResultUtils.success(userAccessKey);
+    }
+
+    // 下载sk，ak
+    @GetMapping( "/get/sk" )
+    public BaseResponse<String> getSk(Long userId, HttpServletRequest request) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+        }
+        String key = userService.getSk(userId, request);
+        return ResultUtils.success(key);
+    }
+
+    /**
+     * 下载sdk
+     *
+     * @param response
+     * @throws FileNotFoundException
+     */
+    @GetMapping( "/downLoad" )
+    public BaseResponse<Boolean> downLoad(HttpServletRequest request, HttpServletResponse response) throws FileNotFoundException {
+        // 下载本地文件
+        String fileName = "flyapi-client-sdk-0.0.1.jar".toString(); // 文件的默认保存名
+        // 读到流中
+        InputStream inStream = new FileInputStream("D:\\fly\\project\\OpenAPI\\flyAPI-backend\\flyapi-backend\\flyapi-client-sdk\\target\\flyapi-client-sdk-0.0.1.jar");// 文件的存放路径
+        // 设置输出的格式
+        response.reset();
+        response.addHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
+        response.addHeader("Access-Control-Allow-Origin", "http://localhost:8000");//允许所有来源访同
+        response.addHeader("Access-Control-Allow-Method", "POST,GET");//允许访问的方式
+
+        // 循环取出流中的数据
+        byte[] b = new byte[100];
+        int len = 0;
+        try {
+            while (true) {
+                try {
+                    if (!((len = inStream.read(b)) > 0)) break;
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                response.getOutputStream().write(b, 0, len);
+            }
+            inStream.close();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        System.out.println("success");
+
+        return ResultUtils.success(true);
+    }
+
+
+    @GetMapping( "/develop/download" )
+    public BaseResponse<ResponseEntity<byte[]>> downloadSk(HttpServletResponse response, HttpServletRequest request) {
+        ResponseEntity<byte[]> responseEntity = userService.downloadSk(response, request);
+        return ResultUtils.success(responseEntity);
+    }
 }

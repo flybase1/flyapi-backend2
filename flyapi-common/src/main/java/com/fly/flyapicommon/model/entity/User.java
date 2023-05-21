@@ -51,6 +51,16 @@ public class User implements Serializable {
     private String userPassword;
 
     /**
+     * 手机号
+     */
+    private String phoneNum;
+
+    /**
+     * 邮箱
+     */
+    private String email;
+
+    /**
      * 创建时间
      */
     private Date createTime;
@@ -75,6 +85,11 @@ public class User implements Serializable {
      * 密钥
      */
     private String secretKey;
+
+    /**
+     * 下载密钥次数
+     */
+    private Integer downloadCount;
 
 
     @TableField( exist = false )

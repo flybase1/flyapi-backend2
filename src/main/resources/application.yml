@@ -38,6 +38,7 @@ flyapi:
     access-key: 9e44946a265c996e05f6fad5bab87249
     secret-key: 4440120741c2ba54361754056a1c134e
 
+
 #dubbo:
 #  application:
 #    name: dubbo-springboot-provider
